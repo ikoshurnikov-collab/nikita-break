@@ -1,7 +1,29 @@
 {
-  "hasUploadedMedia": false,
-  "avatar": false,
-  "videos": [],
-  "photos": [],
-  "audio": []
+  "hasUploadedMedia": true,
+  "avatar": true,
+  "videos": [
+    "square-steps", "lunges-toprock", "kick-step", "kick-out", "go-down",
+    "dorozhka", "three-step", "storm-sweep", "shadn-step", "arrows-footwork"
+  ],
+  "photos": [
+    "square-steps", "lunges-toprock", "kick-step", "kick-out", "go-down",
+    "dorozhka", "three-step", "storm-sweep", "shadn-step", "arrows-footwork"
+  ],
+  "audio": [
+    "greeting", "warmup", "mastered", "combo-finish",
+    "count-3", "count-2", "count-1", "count-break",
+    "beat-1", "beat-2", "beat-3", "beat-4",
+    "short-square-steps", "short-lunges-toprock", "short-kick-step", "short-kick-out", "short-go-down",
+    "short-dorozhka", "short-three-step", "short-storm-sweep", "short-shadn-step", "short-arrows-footwork",
+    "square-steps", "square-steps-1", "square-steps-2", "square-steps-3", "square-steps-4",
+    "lunges-toprock", "lunges-toprock-1", "lunges-toprock-2", "lunges-toprock-3", "lunges-toprock-4",
+    "kick-step", "kick-step-1", "kick-step-2", "kick-step-3", "kick-step-4",
+    "kick-out", "kick-out-1", "kick-out-2", "kick-out-3", "kick-out-4",
+    "go-down", "go-down-1", "go-down-2", "go-down-3", "go-down-4",
+    "dorozhka", "dorozhka-1", "dorozhka-2", "dorozhka-3", "dorozhka-4",
+    "three-step", "three-step-1", "three-step-2", "three-step-3", "three-step-4",
+    "storm-sweep", "storm-sweep-1", "storm-sweep-2", "storm-sweep-3", "storm-sweep-4",
+    "shadn-step", "shadn-step-1", "shadn-step-2", "shadn-step-3", "shadn-step-4",
+    "arrows-footwork", "arrows-footwork-1", "arrows-footwork-2", "arrows-footwork-3", "arrows-footwork-4"
+  ]
 }
