@@ -32,6 +32,13 @@ jobs:
         with:
           node-version: 20
 
+      - name: Sync videos and audio from root if present
+        run: |
+          mkdir -p ./public/nikita/videos ./public/nikita/audio ./public/nikita/photos
+          if [ -d "../videos" ]; then cp -r ../videos/* ./public/nikita/videos/ || true; fi
+          if [ -d "../audio" ]; then cp -r ../audio/* ./public/nikita/audio/ || true; fi
+          if [ -d "../photos" ]; then cp -r ../photos/* ./public/nikita/photos/ || true; fi
+
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
