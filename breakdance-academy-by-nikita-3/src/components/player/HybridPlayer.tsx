@@ -6,7 +6,6 @@ import { StepByStepViewer } from './StepByStepViewer';
 import { NikitaAvatar } from '../common/NikitaAvatar';
 import { soundEngine } from '../../services/soundEngine';
 import { speechService } from '../../services/speechService';
-import { getVideoUrlCandidates, loadNikitaMediaManifest } from '../../data/nikitaMediaManifest';
 import { Play, Pause, RotateCw, Video, UserCheck, Volume2, Sparkles } from 'lucide-react';
 
 interface HybridPlayerProps {
@@ -16,34 +15,18 @@ interface HybridPlayerProps {
 type PlayerTab = 'simulator' | 'video' | 'steps';
 
 export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
-  const [activeTab, setActiveTab] = useState<PlayerTab>('simulator');
+  const [activeTab, setActiveTab] = useState<PlayerTab>('video');
   const [isPlaying, setIsPlaying] = useState(true);
-  const [speed, setSpeed] = useState<0.25 | 0.5 | 1.0>(0.5); // Default to 0.5x educational
+  const [speed, setSpeed] = useState<0.25 | 0.5 | 1.0>(0.5);
   const [isMirrored, setIsMirrored] = useState(false);
   const [isVoiceCountEnabled, setIsVoiceCountEnabled] = useState(false);
   const [showSilentModeHint, setShowSilentModeHint] = useState(false);
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
   const [isCountingDown, setIsCountingDown] = useState(false);
   const [countdownNum, setCountdownNum] = useState<number | string>(3);
+  const [hasStaticVideo, setHasStaticVideo] = useState(true);
 
-  const [videoCandidates, setVideoCandidates] = useState<string[]>(() =>
-    getVideoUrlCandidates(move.id, move.videoPath)
-  );
-  const [videoCandidateIdx, setVideoCandidateIdx] = useState(0);
-  const [hasStaticVideo, setHasStaticVideo] = useState(false);
-  const [videoChecked, setVideoChecked] = useState(false);
-
-  const directVideoFallbacks = [
-    move.videoPath || `./nikita/videos/${move.id}.mp4`,
-    `./nikita/videos/${move.id}.MP4`
-  ];
-  const effectiveVideoCandidates =
-    videoCandidates.length > 0 ? videoCandidates : directVideoFallbacks;
-
-  const activeVideoSrc =
-    effectiveVideoCandidates[
-      Math.min(videoCandidateIdx, effectiveVideoCandidates.length - 1)
-    ] || `./nikita/videos/${move.id}.mp4`;
+  const activeVideoSrc = `./nikita/videos/${move.id}.mp4`;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const countdownTimersRef = useRef<number[]>([]);
@@ -53,7 +36,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
   const beatsPerPhase = move.rhythmConfig?.beatsPerPhase ?? 1;
   const phaseVoiceCues = move.rhythmConfig?.phaseVoiceCues ?? ['Раз!', 'Два!', 'Три!', 'Четыре!'];
 
-  // Master Clock formula: phaseDurationMs = ((60 / baseBpm) * 1000 * beatsPerPhase) / speed
   const phaseDurationMs = ((60 / baseBpm) * 1000 * beatsPerPhase) / speed;
   const effectiveBpm = Math.max(
     55,
@@ -67,46 +49,24 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
     countdownTimersRef.current = [];
   };
 
-  // Stop any countdown timers on unmount
   useEffect(() => {
     return () => {
       clearCountdownTimers();
     };
   }, []);
 
-  // Reset probe state when move changes; only auto-probe on startup if in media-manifest.json,
-  // or probe on demand when the user clicks the "📹 ВИДЕО НИКИТЫ" tab
   useEffect(() => {
-    let mounted = true;
     clearCountdownTimers();
     setIsCountingDown(false);
-    setVideoCandidateIdx(0);
-    setHasStaticVideo(false);
-    setActiveTab('simulator');
+    setHasStaticVideo(true);
+    setActiveTab('video');
     setCurrentPhaseIndex(0);
+  }, [move.id]);
 
-    loadNikitaMediaManifest().then(() => {
-      if (!mounted) return;
-      const candidates = getVideoUrlCandidates(move.id, move.videoPath);
-      setVideoCandidates(candidates);
-      if (candidates.length > 0) {
-        setVideoChecked(false);
-      } else {
-        setVideoChecked(true);
-      }
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, [move.id, move.videoPath]);
-
-  // Master Clock: automatically configure soundEngine groove and speed-adjusted BPM for this move
   useEffect(() => {
     soundEngine.configureMoveRhythm(preferredGrooveId, baseBpm, speed);
   }, [move.id, preferredGrooveId, baseBpm, speed]);
 
-  // Synchronize isPlaying and speed with the real <video> element
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid || activeTab !== 'video' || !hasStaticVideo) return;
@@ -118,9 +78,8 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
     } else {
       vid.pause();
     }
-  }, [isPlaying, speed, activeTab, hasStaticVideo, isCountingDown, move.videoPath]);
+  }, [isPlaying, speed, activeTab, hasStaticVideo, isCountingDown, move.id]);
 
-  // Synchronize currentPhaseIndex (0 -> 1 -> 2 -> 3) in the "ВИДЕО НИКИТЫ" tab via requestAnimationFrame + fallback timer
   useEffect(() => {
     if (activeTab !== 'video' || !isPlaying || isCountingDown) {
       return;
@@ -154,7 +113,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
     };
   }, [activeTab, isPlaying, isCountingDown, hasStaticVideo, phaseDurationMs, move.id]);
 
-  // Exact 0ms Master Clock Phase Trigger: Drum Kick/Snare Sync + 1-2-3-4 Voice Counting & Tonal Metronome Click
   useEffect(() => {
     if (!isPlaying || isCountingDown || activeTab === 'steps') {
       return;
@@ -163,7 +121,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
     const phaseIdx = ((currentPhaseIndex % 4) + 4) % 4;
     const phaseNumber = phaseIdx + 1;
 
-    // Synchronize Kick (phases 1 & 3) and Snare (phases 2 & 4) in soundEngine with phase change
     soundEngine.syncPhaseBeat(phaseIdx);
 
     if (!isVoiceCountEnabled) {
@@ -177,17 +134,11 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
 
   const handleSelectVideoTab = () => {
     setActiveTab('video');
-    if (!hasStaticVideo) {
-      setVideoCandidateIdx(0);
-      setVideoChecked(false);
-    }
   };
 
   const handleCountdownAndStart = () => {
-    // BUG-06 FIX: Ignore spam clicks while countdown is already running
     if (isCountingDown) return;
 
-    // BUG-02 FIX: Synchronously unlock AudioContext and warm up <video> inside the direct click event on iOS Safari
     soundEngine.unlock();
     if (videoRef.current) {
       const vid = videoRef.current;
@@ -208,7 +159,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
     soundEngine.configureMoveRhythm(preferredGrooveId, baseBpm, speed);
     setShowSilentModeHint(true);
 
-    // If user is on "ПО ШАГАМ" or on "ВИДЕО НИКИТЫ" without a video file, switch to "2D-ТРЕНАЖЕР"
     if (activeTab === 'steps' || (activeTab === 'video' && !hasStaticVideo)) {
       setActiveTab('simulator');
     }
@@ -318,32 +268,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
 
   return (
     <div className="w-full flex flex-col gap-3">
-      {/* Скрытый пробник видео (проверяет ./nikita/videos/${move.id}.mp4 при переключении на вкладку или из манифеста) */}
-      {!videoChecked && (activeTab === 'video' || videoCandidates.length > 0) && (
-        <video
-          key={`probe-${move.id}-${videoCandidateIdx}`}
-          src={activeVideoSrc}
-          preload="metadata"
-          muted
-          playsInline
-          onLoadedData={() => {
-            setHasStaticVideo(true);
-            setVideoChecked(true);
-            setActiveTab('video');
-          }}
-          onError={() => {
-            if (videoCandidateIdx + 1 < effectiveVideoCandidates.length) {
-              setVideoCandidateIdx((prev) => prev + 1);
-            } else {
-              setHasStaticVideo(false);
-              setVideoChecked(true);
-            }
-          }}
-          className="hidden"
-        />
-      )}
-
-      {/* Nikita quote banner: mobile-responsive */}
       <div className="bg-[#FFE600] border-3 border-black p-2.5 sm:p-3 rounded-lg shadow-[3px_3px_0px_0px_#000] sm:shadow-[4px_4px_0px_0px_#000] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex items-start sm:items-center gap-2.5">
           <NikitaAvatar size="sm" />
@@ -365,12 +289,9 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
         </button>
       </div>
 
-      {/* Mode Selector Tabs: All 3 tabs (🕺 2D-ТРЕНАЖЕР, 📹 ВИДЕО НИКИТЫ, 👤 ПО ШАГАМ) are ALWAYS visible */}
       <div className="grid grid-cols-3 gap-1 sm:gap-1.5 bg-[#1a1a1a] p-1 sm:p-1.5 rounded-lg border-3 border-black shadow-[3px_3px_0px_0px_#000]">
         <button
-          onClick={() => {
-            setActiveTab('simulator');
-          }}
+          onClick={() => setActiveTab('simulator')}
           className={`py-1.5 px-1 sm:px-2 rounded font-heading font-extrabold text-[10px] sm:text-xs transition-all cursor-pointer flex items-center justify-center gap-1 text-center leading-tight ${
             activeTab === 'simulator'
               ? 'bg-[#FFE600] text-black border-2 border-black shadow-[2px_2px_0px_0px_#000]'
@@ -397,9 +318,7 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
         </button>
 
         <button
-          onClick={() => {
-            setActiveTab('steps');
-          }}
+          onClick={() => setActiveTab('steps')}
           className={`py-1.5 px-1 sm:px-2 rounded font-heading font-extrabold text-[10px] sm:text-xs transition-all cursor-pointer flex items-center justify-center gap-1 text-center leading-tight ${
             activeTab === 'steps'
               ? 'bg-[#00E676] text-black border-2 border-black shadow-[2px_2px_0px_0px_#000]'
@@ -411,9 +330,7 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
         </button>
       </div>
 
-      {/* Main Visual Display Area */}
       <div className="relative">
-        {/* Countdown overlay: centered with clean vertical spacing */}
         {isCountingDown && (
           <div className="absolute inset-0 bg-black/90 z-30 rounded-lg flex flex-col items-center justify-center p-4 border-4 border-[#FFE600]">
             <span className="text-zinc-300 font-mono text-xs sm:text-sm font-bold uppercase tracking-wider">
@@ -428,7 +345,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
           </div>
         )}
 
-        {/* Tab 1: 2D Kinematic Simulator & Floor Contact Diagram */}
         {activeTab === 'simulator' && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             <div className="md:col-span-8">
@@ -452,12 +368,10 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
           </div>
         )}
 
-        {/* Tab 2: Nikita Video Player OR Friendly Coming-Soon Card with Avatar & 2D Preview */}
         {activeTab === 'video' && (
           <div className="w-full min-h-[280px] sm:min-h-[340px] bg-black rounded-lg border-3 border-black overflow-hidden flex flex-col items-center justify-center p-3 sm:p-4 relative shadow-[4px_4px_0px_0px_#000]">
             {hasStaticVideo ? (
               <div className="w-full h-full flex flex-col items-center relative">
-                {/* HUD badges for Phase, Mirror & Speed on top of video */}
                 <div className="w-full flex flex-wrap items-center justify-between gap-1.5 mb-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="bg-zinc-900 text-[#FFE600] font-bold text-[11px] px-2 py-0.5 rounded border border-zinc-700">
@@ -482,6 +396,8 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
                     ref={videoRef}
                     src={activeVideoSrc}
                     onClick={handleTogglePlay}
+                    autoPlay
+                    muted
                     loop
                     playsInline
                     {...iosInlineVideoProps}
@@ -490,6 +406,10 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
                       if (isPlaying && !isCountingDown) {
                         e.currentTarget.play().catch(() => {});
                       }
+                    }}
+                    onError={() => {
+                      setHasStaticVideo(false);
+                      setActiveTab('simulator');
                     }}
                     onTimeUpdate={handleVideoTimeUpdate}
                     onPlay={() => setIsPlaying(true)}
@@ -503,14 +423,12 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
                     }`}
                   />
 
-                  {/* Live Phase & Voice Cue Overlay Badge on Video */}
                   <div className="absolute top-2.5 left-2.5 pointer-events-none flex items-center gap-1.5">
                     <span className="bg-black/85 text-[#FFE600] font-mono font-black text-xs sm:text-sm px-2.5 py-1 rounded border-2 border-[#FFE600] shadow-[2px_2px_0px_0px_#000]">
                       ШАГ {activePhaseIdx + 1} / 4 : {activeVoiceCue}
                     </span>
                   </div>
 
-                  {/* Large Side Markers on Video (no native controls overlap!) */}
                   <div className="absolute bottom-3 left-2.5 pointer-events-none">
                     <span
                       className={`px-2.5 sm:px-3 py-1 rounded-md border-2 border-black font-display text-xs sm:text-sm uppercase shadow-[2px_2px_0px_0px_#000] inline-flex items-center gap-1 ${
@@ -537,7 +455,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
               </div>
             ) : (
               <div className="w-full max-w-2xl bg-[#F4EFE6] text-black border-3 border-black rounded-xl p-4 sm:p-5 shadow-[4px_4px_0px_0px_#FFE600] flex flex-col md:flex-row items-center gap-4">
-                {/* 2D Move Preview Box */}
                 <div className="w-full md:w-56 h-44 rounded-lg border-3 border-black overflow-hidden bg-[#151515] shrink-0 relative">
                   <div className="w-full h-full pointer-events-none flex items-center justify-center [&>div]:min-h-0 [&>div]:border-0 [&>div]:rounded-none">
                     <BboySvgSimulator
@@ -551,7 +468,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
                   </div>
                 </div>
 
-                {/* Friendly Message with Nikita's Avatar */}
                 <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left">
                   <div className="flex items-center gap-3 mb-2.5">
                     <NikitaAvatar size="md" showGradeBadge={true} />
@@ -592,7 +508,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
           </div>
         )}
 
-        {/* Tab 3: Step-by-Step Breakdown */}
         {activeTab === 'steps' && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             <div className="md:col-span-6">
@@ -615,10 +530,8 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
         )}
       </div>
 
-      {/* Training Control Toolbar */}
       {showFullPlaybackControls && (
         <div className="bg-[#ffffff] border-3 border-black p-2.5 sm:p-3 rounded-lg shadow-[4px_4px_0px_0px_#000] flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-between gap-2">
-          {/* Play / Pause, 3-2-1 Countdown & 🔊 Счёт 1-2-3-4 */}
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
             <button
               onClick={handleTogglePlay}
@@ -654,7 +567,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
             </button>
           </div>
 
-          {/* Speed Selector + Mirror Button row */}
           <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2">
             <div className="flex items-center gap-1 bg-[#F4EFE6] border-2 border-black p-1 rounded flex-1 sm:flex-initial justify-between">
               <span className="text-[10px] font-mono font-bold text-zinc-600 px-1">Темп:</span>
@@ -675,7 +587,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
               </div>
             </div>
 
-            {/* Mirror Mode Button (спортзал) */}
             <button
               onClick={handleToggleMirror}
               className={`px-2.5 sm:px-3 py-1.5 rounded font-heading font-extrabold text-xs flex items-center justify-center gap-1.5 border-2 border-black cursor-pointer transition-all shrink-0 ${
@@ -718,7 +629,6 @@ export const HybridPlayer: React.FC<HybridPlayerProps> = ({ move }) => {
         </div>
       )}
 
-      {/* iOS Hardware Silent Switch Hint */}
       {(isVoiceCountEnabled || showSilentModeHint) && (
         <div className="bg-[#1a1a1a] text-zinc-200 border-2 border-black px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-between gap-2">
           <span>🔇 Если звука не слышно — проверь рычажок беззвучного режима на телефоне</span>
